@@ -1,0 +1,66 @@
+name: rixs
+project: rixs-clifford
+entity: badboyz2000
+program: /Users/souloke/Programs/cong_mvn/mvn/rixs.py 
+method: grid
+
+command:
+  - ${env}
+  - ${interpreter}
+  - ${program}
+  - --dtype=float64
+  - --trainer.module=engineer.trainer.Trainer
+#  - --trainer.val_check_interval=35
+#  - --trainer.max_steps=105000
+  - --trainer.train_metrics=[loss]    #dont change
+  - --trainer.test_metrics=[loss]     #dont change
+  - --trainer.gradclip=adaptive       #dont change
+  - --trainer.logtransform="False"    #if you want log transform the spectra
+  - --trainer.pca="False"             #if you want to do PCA on spectra
+#  - --trainer.log_interval=35
+  # Dataset
+  - --dataset.module=data.rixs.RIXS
+  - --dataset.batch_size=10          #batch size
+  - --dataset.pathroot="/Users/souloke/Programs/cong_mvn/datasets/RIXS/spectra_normalized"  #path do data folder
+  - --dataset.n_train=350            #number of training samples
+  - --dataset.n_val=75               #number of validation samples
+  - --dataset.n_test=75              #number of test samples
+  - --dataset.cutoff_radii=5.0       #cut off radii to determine message passing between atoms
+  - --dataset.logtransform="False"   #if you want log transform the spectra (must match with above in trainer)
+  - --dataset.pca="False"            #if you want do a PCA on spectra (must match with above in trainer)
+  # Optimizer
+  - --optimizer.module=torch.optim.AdamW  #dont change
+  - --optimizer.foreach=False             #dont change
+  - --optimizer.min_lrs=False             #dont change
+  - --optimizer.decay_steps=0.25          #decay steps for optimizer scheduler (dont change)
+#  - --optimizer.lr=5e-3
+#  - --optimizer.wlr=5e-5
+  - --optimizer.weight_decay=1e-4         #dont change
+  # EGNN
+  - --model.module=models.rixs_clifford_egnn.RIXSEGNN_C  
+  - --model.hidden_features=64            #number of hidden features
+  - --model.hidden_features_v=64          #number of hidden features
+  - --model.out_features=201              # output spectra dimension
+#  - --model.printstep=35
+  # - --model.energyOnly=False
+  # - --model.weight_reg=1e-4
+  # - --model.regtype="L1"  
+  # loss module
+#  - -- loss.printstep=35
+  - --loss.module=losses.lossRIXS.RIXSLoss
+  - ${args}
+
+
+parameters:
+  trainer.max_steps:      
+    values: [35000]                  #maximum number of steps, calculated as maxsteps = num_smaples/batch_size * no of epochs
+    
+  optimizer.lr:
+    values: [5e-3]                   #optimizer learning rate
+
+    
+  model.num_layers:
+    values: [3]                      # number of hidden layers
+
+  seed:
+    values: [0]                     # number of seeds to run 
