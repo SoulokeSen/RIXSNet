@@ -11,28 +11,34 @@ import matplotlib.pyplot as plt
 import torch
 from pathlib import Path
 import os
-import joblib
+import joblib, shutil
+from matplotlib.backends.backend_pdf import PdfPages
 
 def save_spectra_pdfs(preds, targets, output_dir="spectra_plots"):
+    
+    if os.path.exists(output_dir):
+        shutil.rmtree(output_dir)
+    
     os.makedirs(output_dir, exist_ok=True)
 
     n_samples = preds.shape[0]
+    with PdfPages(output_dir / "all_plots.pdf") as pdf:
+        for i in range(n_samples):
+            plt.figure()
 
-    for i in range(n_samples):
-        plt.figure()
+            plt.plot(targets[i], label="Target")
+            plt.plot(preds[i], label="Prediction")
 
-        plt.plot(targets[i], label="Target")
-        plt.plot(preds[i], label="Prediction")
+            plt.xlabel("Spectra index / Energy")
+            plt.ylabel("Intensity")
+            plt.ylim(-0.1, 1.0)
+            plt.title(f"Sample {i}")
+            plt.legend()
 
-        plt.xlabel("Spectra index / Energy")
-        plt.ylabel("Intensity")
-        plt.ylim(-0.1, 1.0)
-        plt.title(f"Sample {i}")
-        plt.legend()
-
-        filename = os.path.join(output_dir, f"sample_{i}.pdf")
-        plt.savefig(filename, bbox_inches="tight")
-        plt.close()
+            filename = os.path.join(output_dir, f"sample_{i}.pdf")
+#            plt.savefig(filename, bbox_inches="tight")
+            pdf.savefig()
+            plt.close()
 
     print(f"Saved {n_samples} PDF files in '{output_dir}'")    
 #    plt.show()

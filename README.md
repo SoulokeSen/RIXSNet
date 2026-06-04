@@ -5,7 +5,7 @@
 ```
 conda create -n mvn python=3.10 -c conda-forge -y
 conda activate mvn
-conda install -c conda-forge -y numpy=2.2.5 scipy scikit-learn joblib matplotlib h5py=3.15.1 pyyaml rdkit
+conda install -c conda-forge -y numpy=2.2.5 scipy scikit-learn joblib matplotlib h5py=3.15.1 pyyaml rdkit pip
 pip install torch==2.6.0 torchvision==0.21.0 torchaudio==2.6.0 --index-url https://download.pytorch.org/whl/cpu
 pip install torch_geometric
 pip install torch_scatter torch_sparse torch_cluster torch_spline_conv -f https://data.pyg.org/whl/torch-2.6.0+cpu.html

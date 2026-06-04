@@ -48,6 +48,8 @@ command:
   # loss module
 #  - -- loss.printstep=35
   - --loss.module=losses.lossRIXS.RIXSLoss
+  - --loss.weight_reg=1e-3
+  - --loss.regtype="L2"
   - ${args}
 
 
@@ -58,6 +60,8 @@ parameters:
   optimizer.lr:
     values: [5e-3]                   #optimizer learning rate
 
+  optimizer.wlr:
+    values: [5e-3]  
     
   model.num_layers:
     values: [3]                      # number of hidden layers

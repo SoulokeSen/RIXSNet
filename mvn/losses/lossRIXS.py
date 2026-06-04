@@ -27,20 +27,26 @@ import math
 
 class RIXSLoss(nn.Module): #SS
 
-    def __init__(self, printstep, weights=None): #weights for the multiobjective loss function
+    def __init__(self, printstep, weight_reg, regtype, weights=None): #weights for the multiobjective loss function
     
         super().__init__()
 #        self.mse = nn.MSELoss()
         self.weights = weights
         self.printstep = printstep
-        
+        # self.w_regression = nn.Parameter(torch.tensor(0.0))
+        # self.w_penalty = nn.Parameter(torch.tensor(0.0))
+        # self.lambda_log = weight_reg
+        # self.regtype = regtype
         
     def forward(self, pred_spectra, batch, step):
         
         components=[]    
         target_spectra = batch.spectrum
-#        loss_spectra = F.mse_loss(pred_spectra, target_spectra, reduction="none").mean(dim=1)
-        loss_spectra = self.hybrid_mse_logmse(pred_spectra, target_spectra)
+        loss_spectra = F.mse_loss(pred_spectra, target_spectra, reduction="none").mean(dim=1)
+#        loss_spectra = self.weighted_mae_1(pred_spectra, target_spectra)
+#        loss_spectra, regcomp, pencomp, w_reg, w_pen = self._masked_MAEloss_pw3(pred_spectra, target_spectra)
+#        loss_spectra = self.relativemaeloss(pred_spectra,target_spectra)
+#        loss_spectra = self.hybrid_mse_logmse(pred_spectra, target_spectra)
 #        loss_spectra = self.weighted_mse(pred_spectra,target_spectra)
 #        loss_spectra = self.weighted_mse_logspace_3(pred_spectra,target_spectra)
 #        loss_spectra = self.weighted_mse_logspace_2(pred_spectra,target_spectra)
@@ -55,12 +61,59 @@ class RIXSLoss(nn.Module): #SS
             torch.set_printoptions(precision=8)
             print("==== Loss ====")
             print("             ")
-            print(" spectra loss ", loss_spectra.mean())
+            print(" spectra loss      ", loss_spectra.mean())
+            # print(" spectra_regression", regcomp.mean())
+            # print(" spectra penalty   ", pencomp.mean())
+            # print("weights            ", w_reg, w_pen)
             print("             ")
             print("------------------------------------------")
-            print("Total                     :", total.mean())            
+            print("Total             :", total.mean())            
             
         return total, components
+    
+    
+    
+    def  _masked_MAEloss_pw3(self, pred, target, param=None, eps=1e-2, tau=1e-12):
+
+
+        if pred.shape != target.shape:
+            raise ValueError(f"pred and target must have the same shape, got {pred.shape} vs {target.shape}")
+
+        reduce_axes = tuple(range(1, pred.ndim))
+
+        mask = (target.abs() > eps).float()
+        
+        if param is not None:       
+
+            w_nz = torch.exp(param[0])
+            w_z = torch.exp(param[1])
+        
+        else:
+            # w_nz = 1.0
+            # w_z = 5.25
+
+            w_nz = 1.0
+            w_z = 1.0
+
+        
+        MAE_nz = (mask * torch.abs(pred - target)).sum(dim=reduce_axes)/(mask.sum(dim=reduce_axes) + eps)    
+        zero_penalty = ((1 - mask) * torch.abs(pred)).sum(dim=reduce_axes)/((1 - mask).sum(dim=reduce_axes) + eps)
+
+        weighted_loss = w_nz*MAE_nz + w_z*zero_penalty
+
+
+        if param is not None:  
+            if self.regtype == "L1" :
+                scale_penalty = torch.abs(param[0]) + torch.abs(param[1])
+            else:   
+                scale_penalty = param[0]**2 + param[1]**2
+
+        if param is not None:
+#            return weighted_loss , MAE_nz, zero_penalty, w_nz.detach(), w_z.detach()
+            return (weighted_loss + self.lambda_log * scale_penalty) , MAE_nz, zero_penalty, w_nz.detach(), w_z.detach()
+        else:
+            return weighted_loss , MAE_nz, zero_penalty, w_nz, w_z
+        
     
     def weighted_mse(self, pred_spectra,target_spectra):
         
@@ -80,7 +133,18 @@ class RIXSLoss(nn.Module): #SS
         loss = (weights * (pred_spectra - target_spectra)**2).sum(dim=1)/weights.sum(dim=1) 
         
         return loss  
- 
+
+    def weighted_mae_1(self, pred_spectra,target_spectra, threshold=0.1):
+        
+        if pred_spectra.shape != target_spectra.shape:
+            raise ValueError(f"pred and target must have the same shape, got {pred_spectra.shape} vs {target_spectra.shape}")        
+        
+        weights = torch.where(target_spectra > threshold, 100.0, 1.0)
+        
+        loss = (weights * torch.abs(pred_spectra - target_spectra)).sum(dim=1)/weights.sum(dim=1) 
+        
+        return loss    
+
     def weighted_mse_logspace(self,pred_spectra,target_spectra):
         
         weights = 1 + 4 * torch.exp(target_spectra)   # target in linear space
@@ -145,9 +209,18 @@ class RIXSLoss(nn.Module): #SS
         
         return loss
     
-    def hybrid_mse_logmse(self,pred_spectra,target_spectra, alpha=0.3, beta=0.7, eps=1e-12):
+    def hybrid_mse_logmse(self,pred_spectra,target_spectra, alpha=1.0, beta=0.1, eps=1e-12):
         
         mse = F.mse_loss(pred_spectra, target_spectra, reduction="none").mean(dim=1)
         logmse = F.mse_loss(torch.log(pred_spectra+eps), torch.log(target_spectra+eps), reduction="none").mean(dim=1)
         
         return alpha*mse + beta*logmse
+    
+    def relativemaeloss(self,pred_spectra,target_spectra, eps=1e-8):
+        
+        rel_error = (torch.abs((pred_spectra - target_spectra) / (target_spectra + eps))).mean(dim=1)
+        
+        return rel_error
+       
+
+        

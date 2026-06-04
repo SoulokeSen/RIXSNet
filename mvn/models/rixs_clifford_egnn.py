@@ -123,11 +123,13 @@ class RIXSEGNN_C(nn.Module):
         layers = []
         for i in range(num_layers):
             layers.append(
-                EGNN_C_Block(hidden_features+1, hidden_features+1, hidden_features_v, hidden_features_v, subspaces=True)
+                EGNN_C_Block(hidden_features, hidden_features, hidden_features_v, hidden_features_v, subspaces=True)
             )
 
         self.projection =  MVLinear(self.algebra, hidden_features_v, out_features, subspaces=False, bias=True)
+        self.s_projection = nn.Linear(hidden_features+hidden_features_v, out_features)
         self.xnorm = MVLayerNorm(self.algebra, out_features)
+        self.snorm = nn.LayerNorm(hidden_features+hidden_features_v)
 
         self.model = nn.Sequential(*layers)
         # self.finalprojection_s = nn.Sequential(
@@ -140,20 +142,22 @@ class RIXSEGNN_C(nn.Module):
 #        print("x shape", x.shape)
         for layer in self.model:
             s, x = layer(s, x, edge_index)
+            
+        s_x = x[:, :, 0]
+        s = torch.cat([s, s_x], dim=1)
 #        print("s.shape", s.shape)
 #        s = global_add_pool(s, batch)
-#        print("shape of s", s.shape)
+        s = global_add_pool(s, batch)
+        s = self.snorm(s)
+        s = self.s_projection(s)
+#        print("pred_spectra before softplus", s)
+#        s = F.softplus(s)
+#        print("pred_spectra before softplus", s)
+        # x = self.projection(x)
+        # x = self.xnorm(x)
+        # x = self.algebra.split(global_add_pool(self.algebra.flatten(x), batch))
 
-#        s = self.finalprojection_s(s)
-           
-#        print("shape of s", s.shape)
-        # exit()
-        x = self.projection(x)
-        x = self.xnorm(x)
-        x = self.algebra.split(global_add_pool(self.algebra.flatten(x), batch))
-#        exit()    
-#        print("shape of x", x.shape)
-        return x
+        return s
     
     def forward(self, batch, step, mode, lossfn):
 #        batch = batch.to("cuda")
@@ -179,8 +183,8 @@ class RIXSEGNN_C(nn.Module):
 #        print("shape of atomic_numbers, coords, charges, y, edgeindex",atomic_numbers, charges,coords,y,edge_index)
 #        print ("shape of atomic_numbers, coords, charges, y, edgeindex", atomic_numbers.shape, coords.shape, charges.shape, y.shape, edge_index.shape)
         z_embed = self.inv_feature_embedding(atomic_numbers)        
-
-        s = torch.cat([z_embed, charges], dim=1)
+        s = z_embed
+#        s = torch.cat([z_embed, charges], dim=1)
         # print("s", s)
         # print("s shape", s.shape)
         # invariant features
@@ -198,22 +202,18 @@ class RIXSEGNN_C(nn.Module):
 
         
         pred_spectra = self._forward(s, input_pos, edge_index, batch.batch) 
-#        print("size of pred_pos", pred_spectra.shape)
-#        print("pred_spectra", pred_spectra)
-        pred_sp = pred_spectra[:, :, 0]
-#        print("pred_sp before", pred_sp[0])
-        pred_sp = F.softplus(pred_sp)
-#        print("pred_sp after", pred_sp[0])
-#        print("pred_sp", pred_sp)
-#        pred_sp = torch.sigmoid(pred_sp)
-#        print("pred_sp", pred_sp, pred_sp.shape)
-        loss, comp = lossfn(pred_sp, batch, step) 
+
+#        pred_sp = pred_spectra[:, :, 0]
+        
+#        pred_sp = F.softplus(pred_spectra)
+        
+        loss, comp = lossfn(pred_spectra, batch, step) 
         t = torch.tensor(comp, dtype=torch.float64)
         return (
             loss.mean(),
             {"loss":  loss,},
             t,
-            [pred_sp,batch.spectrum]
+            [pred_spectra,batch.spectrum]
         )
 
 
